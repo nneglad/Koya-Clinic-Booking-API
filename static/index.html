@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinic Appointment Booking</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 30px 15px;
+            font-family: Arial, sans-serif;
+            background: #f3f6fa;
+            color: #263449;
+        }
+
+        .container {
+            max-width: 550px;
+            margin: 30px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            color: #17365d;
+            text-align: center;
+        }
+
+        .intro {
+            text-align: center;
+            color: #667085;
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-top: 17px;
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccd3dd;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 20px;
+            padding: 13px;
+            border: none;
+            border-radius: 6px;
+            background: #17365d;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #245487;
+        }
+
+        #message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 6px;
+            display: none;
+            overflow-wrap: anywhere;
+        }
+
+        .success {
+            display: block !important;
+            background: #e7f6ec;
+            color: #176b36;
+        }
+
+        .error {
+            display: block !important;
+            background: #fdecec;
+            color: #a12626;
+        }
+
+        .small-note {
+            font-size: 12px;
+            color: #667085;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Clinic Appointment Booking</h1>
+
+    <p class="intro">
+        Welcome! View available appointments and book your clinic visit.
+    </p>
+
+    <label for="apiKey">API Key</label>
+    <input
+        type="password"
+        id="apiKey"
+        placeholder="Enter your clinic API key"
+    >
+
+    <button onclick="loadSlots()">View Available Appointments</button>
+
+    <label for="patientName">Full Name</label>
+    <input
+        type="text"
+        id="patientName"
+        placeholder="Enter your full name"
+    >
+
+    <label for="patientEmail">Email Address</label>
+    <input
+        type="email"
+        id="patientEmail"
+        placeholder="Enter your email address"
+    >
+
+    <label for="slotSelect">Choose an Appointment</label>
+    <select id="slotSelect">
+        <option value="">Load appointments first</option>
+    </select>
+
+    <button onclick="bookAppointment()">Book Appointment</button>
+
+    <div id="message"></div>
+
+    <p class="small-note">
+        Your booking will be confirmed when the API successfully processes it.
+    </p>
+
+</div>
+
+<script>
+    const API_URL = window.location.origin;
+
+    function showMessage(message, type) {
+        const box = document.getElementById("message");
+        box.textContent = message;
+        box.className = type;
+    }
+
+    async function loadSlots() {
+        const apiKey = document.getElementById("apiKey").value;
+
+        if (!apiKey) {
+            showMessage("Please enter your API key.", "error");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/slots`, {
+                headers: {
+                    "X-API-Key": apiKey
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "Could not load appointments.");
+            }
+
+            const select = document.getElementById("slotSelect");
+            select.innerHTML = "";
+
+            const availableSlots = data.slots.filter(slot => slot.available);
+
+            if (availableSlots.length === 0) {
+                select.innerHTML = '<option value="">No appointments available</option>';
+                showMessage("There are currently no available appointments.", "error");
+                return;
+            }
+
+            select.innerHTML = '<option value="">Select an appointment</option>';
+
+            availableSlots.forEach(slot => {
+                const option = document.createElement("option");
+                option.value = slot.id;
+
+                const date = new Date(slot.start).toLocaleString();
+
+                option.textContent = `${slot.provider} — ${date}`;
+                select.appendChild(option);
+            });
+
+            showMessage(
+                `${availableSlots.length} available appointment(s) loaded.`,
+                "success"
+            );
+
+        } catch (error) {
+            showMessage(error.message, "error");
+        }
+    }
+
+    async function bookAppointment() {
+        const apiKey = document.getElementById("apiKey").value;
+        const name = document.getElementById("patientName").value.trim();
+        const email = document.getElementById("patientEmail").value.trim();
+        const slotId = document.getElementById("slotSelect").value;
+
+        if (!apiKey || !name || !email || !slotId) {
+            showMessage(
+                "Please enter your API key, name, email and select an appointment.",
+                "error"
+            );
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/bookings`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": apiKey
+                },
+                body: JSON.stringify({
+                    slot_id: slotId,
+                    name: name,
+                    email: email
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "Booking could not be completed.");
+            }
+
+            showMessage(
+                `Booking confirmed! Your booking ID is ${data.id}`,
+                "success"
+            );
+
+            await loadSlots();
+
+        } catch (error) {
+            showMessage(error.message, "error");
+        }
+    }
+</script>
+
+</body>
+</html>
